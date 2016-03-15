@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Document</title>
+	<style>
+		.box{
+			margin: 10px;
+			background: lightsalmon;
+			border:4px solid lightgreen;
+			height: 300px;
+			width: 300px;
+		}
+		button{
+			height:200px;
+			width:100px;
+		}
+
+		#copy {
+			/*animation-iteration-count: 6;*/
+			/*animation-duration:1s;*/
+		}
+		.animationCss{
+			/*animation-name:flipInY;*/
+			/*animation-duration:1s;*/
+			/*animation-iteration-count: 6;*/
+		}
+
+		@keyframes flipInX {
+			100%{
+				transform: perspective(400px) rotateX(-30deg);
+			}
+		}
+		@keyframes flipInY {
+			100%{
+				transform: perspective(400px) rotateY(-30deg);
+			}
+		}
+		@-webkit-keyframes flipInY {
+			100%{
+				transform: perspective(400px) rotateY(-30deg);
+			}
+		}
+	</style>
+</head>
+<body>
+<div class="container">
+	<div class="box" id="copy"></div>
+	<button style="" id="btnA">按钮 A</button>
+	<button style="height:200px;" id="btnB">按钮 B</button>
+</div>
+<script src="jquery.js"></script>
+<script src="cssProp.js"></script>
+<script>
+	$(function() {
+		var $target = $('#copy'),
+				$btnA = $('#btnA'),
+				$btnB = $('#btnB');
+
+		switch ('demo of animation'){
+
+			case 'demo of transition':
+				$target.transition({
+					duration: 3000, property: 'transform', timing: 'ease-in', delay: 1000
+				});
+				$btnA.click(function(){
+					$target.transition({
+						duration: 1000
+					});
+				});
+				$btnB.click(function(){
+					$target.css('transform', 'translateY(200px)');
+				});
+				break;
+
+			case 'demo of animation':
+
+				$btnA.click(function(){
+					//新动画
+//					$target.animation({
+//						name: 'flipInX'
+//					});
+					// 再次触发旧动画
+					$target.animation({
+						name: 'flipInY'
+					});
+					// 获取状态
+//					console.log($target.animation());
+				});
+				$btnB.click(function(){
+					$target.animation({
+						name: 'flipInY',
+						duration: '1s',
+						iteration: 5,
+						delay: '1s',
+						direction:'alternate'
+					}, function(){
+						console.log('done')
+					});
+				});
+				break;
+
+			case 'demo of transform':
+				break;
+		}
+	})
+</script>
+</body>
+</html>
