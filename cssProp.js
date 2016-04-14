@@ -1,9 +1,19 @@
 (function(){
 
+	/*
+	* 本插件的意义在于可以直接包办动画方法, 即使不支持也可以找这里找到降级方法!
+	*
+	* 优化经历:
+	* 1, transform方法基本兼容且处理多个css属性
+	* 2,
+	* */
+
 	var cssProp = {
 		// 环境条件:
-		_transformEnabled: null,
+		_transformsEnabled: null,
 		_transitionEnabled: null,
+		_cssTransitions: null,
+		supportTouch: null,
 
 		// 兼容前缀:
 		_animType: null,
@@ -11,18 +21,35 @@
 		_transitionType: null,
 		_animationType: null,
 
+		// touchEvent
+		_startEvent:null,
+		_moveEvent:null,
+		_endEvent:null,
+
+		// rAF
+		requestAnimationFrame: null,
+		cancelAnimationFrame: null,
+
 		// 便捷方法:
 		animation: null,
 		transition: null,
-		transform: null
+		transform: null,
+		getTranslate: null
 	};
 
+	/*事件类型*/
+	cssProp.supportTouch = !!(('ontouchstart' in window) || window.DocumentTouch && document instanceof DocumentTouch);
+	cssProp._startEvent  = cssProp.supportTouch ? 'touchstart' : 'mousedown';
+	cssProp._moveEvent   = cssProp.supportTouch ? 'touchmove'  : 'mousemove';
+	cssProp._endEvent    = cssProp.supportTouch ? 'touchend'   : 'mouseup'  ;
+
+	/*css兼容*/
 	var bodyStyle = document.body.style;
 
 	if (bodyStyle.WebkitTransition !== undefined ||
 		bodyStyle.MozTransition !== undefined ||
 		bodyStyle.msTransition !== undefined) {
-		cssProp._transitionEnabled = true;
+		cssProp._cssTransitions = true;
 	}
 
 	// 检测兼容的CSS前缀
@@ -60,7 +87,7 @@
 		cssProp._transitionType = 'transition';
 		cssProp._animationType = 'animation';
 	}
-	cssProp._transformEnabled = !!cssProp._animType;
+	cssProp._transformsEnabled = !!cssProp._animType;
 
 	/*
 	 * 动画animation
@@ -151,11 +178,55 @@
 	/*
 	* 变形transform
 	* transform的使用不同于与animate/transition, 因为它的旧有值会被新值覆盖!
+	* 由于transform有多个属性, options的值这里是固定格式! {pos:[12, 24, 36], scale: [1, 1, 0], rotate: [0, 0, 0], skew: [0, 0], perspective:0}
 	* */
-	cssProp.transform = function(settings) {
-		var transform = {};
-		transform[cssProp._transformType] = settings;
-		$(this).css(transform);
+	cssProp.transform = function(options) {
+		var optionsDemo = {pos:[12, 24, 36], scale: [1, 1, 0], rotate: {x: 0, y: 0, z: 0, deg:0}, skew: [0, 0], perspective:0};
+
+		var transformProp = {};
+		options = options || {};
+		var pos, scale, rotate = '', skew, prt;
+
+		/*环境没有transform功能*/
+		if (cssProp._transformsEnabled === false) {
+			if(options.pos){
+				transformProp.left = options.pos[0];
+				transformProp.top  = options.pos[1];
+			}
+		} else {
+			/*环境无transition功能*/
+			if (cssProp._cssTransitions === false) {
+				pos    = options.pos    ? 'translate(' + options.pos[0] + 'px, ' + options.pos[1] + 'px) ' : '';
+				scale  = options.scale  ? 'scale(' + options.scale[0] + ', ' + options.scale[1] + ') ' : '';
+			}
+			/*环境支持最优功能*/
+			else {
+				pos    = options.pos    ? 'translate3d(' + options.pos[0] + 'px, ' + options.pos[1] + 'px, ' + (options.pos[2]||0) + 'px) ' : '';
+				scale  = options.scale  ? 'scale3d(' + options.scale[0] + ', ' + options.scale[1] + ', ' + (options.scale[2]||0) + ') ' : '';
+			}
+			/*rotate*/
+			if(options.rotate){
+				if(options.rotate.deg){
+					if(cssProp._cssTransitions && options.rotate.z){
+						rotate = 'rotate3d(' + options.rotate.x + ',' + options.rotate.y + ',' + options.rotate.z + ',' + options.rotate.deg +'deg) ';
+					}else{
+						rotate = 'rotate(' + options.rotate.deg + 'deg) ';
+					}
+				}else{
+					rotate =
+						(options.rotate.x ? 'rotateX(' + options.rotate.x + 'deg) ' : '' ) +
+						(options.rotate.y ? 'rotateY(' + options.rotate.y + 'deg) ' : '' ) +
+						(options.rotate.z ? 'rotateZ(' + options.rotate.z + 'deg) ' : '' );
+				}
+			}
+			/*skew*/
+			skew = options.skew ? 'skew(' + options.skew[0] + ', ' + options.skew[1] + ') ' : '';
+			/*perspective*/
+			prt  = options.perspective   ? 'perspective(' + options.perspective + 'px) ' : '';
+			/*属性合并*/
+			transformProp[cssProp._transformType] = pos + scale + rotate + skew + prt;
+		} console.log('transformProp', transformProp);
+		$(this).css(transformProp);
 	};
 
 	/* 获取transform的属性值是很难的, matrix计算比较复杂*/
@@ -167,7 +238,6 @@
 		var mat = transform.match(/^matrix3d\((.+)\)$/);
 		return mat ? ~~(mat[1].split(', ')[14]) : 0;
 	};
-
 
 	cssProp.animationEnd = function (callback) {
 		var events = ['webkitAnimationEnd', 'OAnimationEnd', 'MSAnimationEnd', 'animationend'],
@@ -203,6 +273,68 @@
 			}
 		}
 		return this;
+	};
+
+	cssProp.getTranslate = function (el, axis) {
+		var matrix, curTransform, curStyle, transformMatrix;
+
+		// automatic axis detection
+		if (typeof axis === 'undefined') {
+			axis = 'x';
+		}
+
+		curStyle = window.getComputedStyle(el, null);
+		if (window.WebKitCSSMatrix) {
+			// Some old versions of Webkit choke when 'none' is passed; pass
+			// empty string instead in this case
+			transformMatrix = new WebKitCSSMatrix(curStyle.webkitTransform === 'none' ? '' : curStyle.webkitTransform);
+		}
+		else {
+			transformMatrix = curStyle.MozTransform || curStyle.OTransform || curStyle.MsTransform || curStyle.msTransform  || curStyle.transform || curStyle.getPropertyValue('transform').replace('translate(', 'matrix(1, 0, 0, 1,');
+			matrix = transformMatrix.toString().split(',');
+		}
+
+		if (axis === 'x') {
+			//Latest Chrome and webkits Fix
+			if (window.WebKitCSSMatrix)
+				curTransform = transformMatrix.m41;
+			//Crazy IE10 Matrix
+			else if (matrix.length === 16)
+				curTransform = parseFloat(matrix[12]);
+			//Normal Browsers
+			else
+				curTransform = parseFloat(matrix[4]);
+		}
+		if (axis === 'y') {
+			//Latest Chrome and webkits Fix
+			if (window.WebKitCSSMatrix)
+				curTransform = transformMatrix.m42;
+			//Crazy IE10 Matrix
+			else if (matrix.length === 16)
+				curTransform = parseFloat(matrix[13]);
+			//Normal Browsers
+			else
+				curTransform = parseFloat(matrix[5]);
+		}
+
+		return curTransform || 0;
+	};
+
+	cssProp.requestAnimationFrame = function (callback) {
+		if (window.requestAnimationFrame) return window.requestAnimationFrame(callback);
+		else if (window.webkitRequestAnimationFrame) return window.webkitRequestAnimationFrame(callback);
+		else if (window.mozRequestAnimationFrame) return window.mozRequestAnimationFrame(callback);
+		else {
+			return window.setTimeout(callback, 1000 / 60);
+		}
+	};
+	cssProp.cancelAnimationFrame = function (id) {
+		if (window.cancelAnimationFrame) return window.cancelAnimationFrame(id);
+		else if (window.webkitCancelAnimationFrame) return window.webkitCancelAnimationFrame(id);
+		else if (window.mozCancelAnimationFrame) return window.mozCancelAnimationFrame(id);
+		else {
+			return window.clearTimeout(id);
+		}
 	};
 
 	$.extend(jQuery.fn, cssProp);
