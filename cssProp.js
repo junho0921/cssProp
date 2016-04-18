@@ -5,43 +5,92 @@
 	*
 	* 优化经历:
 	* 1, transform方法基本兼容且处理多个css属性
-	* 2,
+	* 2, 区分动态方法与静态方法
+	* 3, 修改命名
 	* */
 
-	var cssProp = {
-		// 环境条件:
-		_transformsEnabled: null,
-		_transitionEnabled: null,
-		_cssTransitions: null,
-		supportTouch: null,
+	var gadget = { 
+		/*静态方法及属性*/
+		css: null,
 
-		// 兼容前缀:
-		_animType: null,
-		_transformType: null,
-		_transitionType: null,
-		_animationType: null,
+		environment: null,
 
-		// touchEvent
-		_startEvent:null,
-		_moveEvent:null,
-		_endEvent:null,
+		// eventType
+		startEventType: null,
+		processEventType: null,
+		stopEventType: null,
 
-		// rAF
-		requestAnimationFrame: null,
-		cancelAnimationFrame: null,
+		// requestAnimationFrame
+		rAF: null,
+		off_rAF: null,
+		
+		// 触控点坐标
+		getTouchPos: null,
+		getTouchX: null,
+		getTouchY: null
+	};
+	
+	gadget.environment = {
+		// css兼容前缀
+		isTransformsEnabled: null,
+		isTransitionEnabled: null,
+		isTouchEnable: null
+	};
+	
+	gadget.css = {
+		type: null,
+		transformType: null,
+		transitionType: null,
+		animationType: null
+	};
 
-		// 便捷方法:
+	gadget.fnMethods = {
+		/*动态方法*/
 		animation: null,
 		transition: null,
 		transform: null,
-		getTranslate: null
+		getTranslate: null,
+
+		// 绑定事件类型与方法的Api
+		onUiStart: null,
+		onUiProcess: null,
+		onUiStop: null
 	};
 
 	/*事件类型*/
-	cssProp.supportTouch = !!(('ontouchstart' in window) || window.DocumentTouch && document instanceof DocumentTouch);
-	cssProp._startEvent  = cssProp.supportTouch ? 'touchstart' : 'mousedown';
-	cssProp._moveEvent   = cssProp.supportTouch ? 'touchmove'  : 'mousemove';
-	cssProp._endEvent    = cssProp.supportTouch ? 'touchend'   : 'mouseup'  ;
+	gadget.environment.isTouchEnable = !!(('ontouchstart' in window) || window.DocumentTouch && document instanceof DocumentTouch);
+	gadget.startEventType = gadget.environment.isTouchEnable ? 'touchstart' : 'mousedown';
+	gadget.processEventType = gadget.moveEventType = gadget.environment.isTouchEnable ? 'touchmove'  : 'mousemove';
+	gadget.stopEventType = gadget.environment.isTouchEnable ? 'touchend'   : 'mouseup'  ;
+
+	/*事件绑定*/
+	$.each(['on', 'one', 'off'], function(i, pre){
+		$.each(['Start', 'Process', 'Stop'], function(k, type){
+			var methodName = pre + 'Ui' + type;
+			var eventType = type.toLowerCase() + 'EventType';
+			gadget.fnMethods[methodName] = function(){
+				var args = Array.prototype.slice.call( arguments );
+				args.unshift(gadget[eventType]);
+				return $.fn[pre].apply(this, args);
+			}
+		});
+	});
+
+	/*获取触控点的坐标值*/
+	gadget.getTouchPage = function (coord, event) {
+		return (gadget.environment.isTouchEnable? event.originalEvent.touches[0]: event)['page' + coord.toUpperCase()];
+	};
+	gadget.getTouchX = function (event) {
+		return gadget.getTouchPage.call(this, 'x', event);
+	};
+	gadget.getTouchY = function (event) {
+		return gadget.getTouchPage.call(this, 'y', event);
+	};
+	gadget.getTouchPos = function (event) {
+		var x = gadget.getTouchX(event);
+		var y = gadget.getTouchY(event);
+		return [x, y];
+	};
 
 	/*css兼容*/
 	var bodyStyle = document.body.style;
@@ -49,45 +98,45 @@
 	if (bodyStyle.WebkitTransition !== undefined ||
 		bodyStyle.MozTransition !== undefined ||
 		bodyStyle.msTransition !== undefined) {
-		cssProp._cssTransitions = true;
+		gadget.environment.isTransitionEnabled = true;
 	}
 
 	// 检测兼容的CSS前缀
 	if (bodyStyle.OTransform !== undefined) {
-		cssProp._animType = 'OTransform';
-		cssProp._transformType = '-o-transform';
-		cssProp._transitionType = 'OTransition';
-		cssProp._animationType = '-o-animation';
-		if (bodyStyle.perspectiveProperty === undefined && bodyStyle.webkitPerspective === undefined) cssProp._animType = false;
+		gadget.css.type = 'OTransform';
+		gadget.css.transformType = '-o-transform';
+		gadget.css.transitionType = 'OTransition';
+		gadget.css.animationType = '-o-animation';
+		if (bodyStyle.perspectiveProperty === undefined && bodyStyle.webkitPerspective === undefined) gadget.css.type = false;
 	}
 	if (bodyStyle.MozTransform !== undefined) {
-		cssProp._animType = 'MozTransform';
-		cssProp._transformType = '-moz-transform';
-		cssProp._transitionType = 'MozTransition';
-		cssProp._animationType = '-moz-animation';
-		if (bodyStyle.perspectiveProperty === undefined && bodyStyle.MozPerspective === undefined) cssProp._animType = false;
+		gadget.css.type = 'MozTransform';
+		gadget.css.transformType = '-moz-transform';
+		gadget.css.transitionType = 'MozTransition';
+		gadget.css.animationType = '-moz-animation';
+		if (bodyStyle.perspectiveProperty === undefined && bodyStyle.MozPerspective === undefined) gadget.css.type = false;
 	}
 	if (bodyStyle.webkitTransform !== undefined) {
-		cssProp._animType = 'webkitTransform';
-		cssProp._transformType = '-webkit-transform';
-		cssProp._transitionType = 'webkitTransition';
-		cssProp._animationType = '-webkit-animation';
-		if (bodyStyle.perspectiveProperty === undefined && bodyStyle.webkitPerspective === undefined) cssProp._animType = false;
+		gadget.css.type = 'webkitTransform';
+		gadget.css.transformType = '-webkit-transform';
+		gadget.css.transitionType = 'webkitTransition';
+		gadget.css.animationType = '-webkit-animation';
+		if (bodyStyle.perspectiveProperty === undefined && bodyStyle.webkitPerspective === undefined) gadget.css.type = false;
 	}
 	if (bodyStyle.msTransform !== undefined) {
-		cssProp._animType = 'msTransform';
-		cssProp._transformType = '-ms-transform';
-		cssProp._transitionType = 'msTransition';
-		cssProp._animationType = '-ms-animation';
-		if (bodyStyle.msTransform === undefined) cssProp._animType = false;
+		gadget.css.type = 'msTransform';
+		gadget.css.transformType = '-ms-transform';
+		gadget.css.transitionType = 'msTransition';
+		gadget.css.animationType = '-ms-animation';
+		if (bodyStyle.msTransform === undefined) gadget.css.type = false;
 	}
-	if (bodyStyle.transform !== undefined && cssProp._animType !== false) {
-		cssProp._animType = 'transform';
-		cssProp._transformType = 'transform';
-		cssProp._transitionType = 'transition';
-		cssProp._animationType = 'animation';
+	if (bodyStyle.transform !== undefined && gadget.css.type !== false) {
+		gadget.css.type = 'transform';
+		gadget.css.transformType = 'transform';
+		gadget.css.transitionType = 'transition';
+		gadget.css.animationType = 'animation';
 	}
-	cssProp._transformsEnabled = !!cssProp._animType;
+	gadget.environment.isTransformsEnabled = !!gadget.css.type;
 
 	/*
 	 * 动画animation
@@ -103,7 +152,7 @@
 	 * @param {function} callback 动画执行完毕的事件。
 	 * @example $(elem).animation({  })
 	 * */
-	cssProp.animation = function(settings, callback) {
+	gadget.fnMethods.animation = function(settings, callback) {
 
 		// 思考使用的情景是:
 		//1, 新添加name动画
@@ -122,33 +171,34 @@
 			if(settings){
 				//animation的属性不能分别添加, 需要一次性按顺序添加添加
 				// 属性先获取配置, 后获取元素原有属性, 都没有才使用默认值
-				animationProps.push(elem.preAnimationName = settings.name || elemStyle[cssProp._animationType + 'Name'] || elem.preAnimationName);// 存储动画名称, 为了可以再次调用
-				animationProps.push(settings.duration || elemStyle[cssProp._animationType + 'Duration'] || '0.01s');
-				animationProps.push(settings.timing || elemStyle[cssProp._animationType + 'TimingFunction'] || 'linear');
-				animationProps.push(settings.delay || elemStyle[cssProp._animationType + 'Delay'] || '0s');
-				animationProps.push(settings.iteration || elemStyle[cssProp._animationType + 'IterationCount'] || '1');
-				animationProps.push(settings.direction || elemStyle[cssProp._animationType + 'Direction'] || 'normal');
+				animationProps.push(elem.preAnimationName = settings.name || elemStyle[gadget.css.animationType + 'Name'] || elem.preAnimationName);// 存储动画名称, 为了可以再次调用
+				animationProps.push(settings.duration || elemStyle[gadget.css.animationType + 'Duration'] || '0.01s');
+				animationProps.push(settings.timing || elemStyle[gadget.css.animationType + 'TimingFunction'] || 'linear');
+				animationProps.push(settings.delay || elemStyle[gadget.css.animationType + 'Delay'] || '0s');
+				animationProps.push(settings.iteration || elemStyle[gadget.css.animationType + 'IterationCount'] || '1');
+				animationProps.push(settings.direction || elemStyle[gadget.css.animationType + 'Direction'] || 'normal');
 			}
 			//if(settings){ // 无效
-			//	if(settings.name !== undefined)animation[cssProp._animationType + '-name'] = settings.name;
-			//	if(settings.duration !== undefined)animation[cssProp._animationType + '-duration'] = settings.duration / 1000 + 's';
-			//	if(settings.timing !== undefined)animation[cssProp._animationType + '-timing-function'] = settings.timing;
-			//	if(settings.delay !== undefined)animation[cssProp.delay + '-delay'] = settings.delay / 1000 + 's';
-			//	if(settings.iteration !== undefined)animation[cssProp._animationType + '-iteration-count'] = settings.iteration;
-			//	if(settings.direction !== undefined)animation[cssProp._animationType + '-direction'] = settings.direction;
+			//	if(settings.name !== undefined)animation[gadget.css.animationType + '-name'] = settings.name;
+			//	if(settings.duration !== undefined)animation[gadget.css.animationType + '-duration'] = settings.duration / 1000 + 's';
+			//	if(settings.timing !== undefined)animation[gadget.css.animationType + '-timing-function'] = settings.timing;
+			//	if(settings.delay !== undefined)animation[gadget.delay + '-delay'] = settings.delay / 1000 + 's';
+			//	if(settings.iteration !== undefined)animation[gadget.css.animationType + '-iteration-count'] = settings.iteration;
+			//	if(settings.direction !== undefined)animation[gadget.css.animationType + '-direction'] = settings.direction;
 			//}
-			cssProp.animationEnd.call($elem, function(){
+			gadget.animationEnd.call($elem, function(){
 				$elem.css(
-					cssProp._animationType,  // 清理动画名称, 保留动画属性
+					gadget.css.animationType,  // 清理动画名称, 保留动画属性
 					' ' + animationProps.slice(1, animationProps.length).join(' ')
 				);
 				elem.animationState = 'animated';
 				if(callback)callback.call(elem);
 			});
 
-			$elem.css(cssProp._animationType, animationProps.join(' '));
+			$elem.css(gadget.css.animationType, animationProps.join(' '));
 		}
 
+		return this;
 	};
 
 	/*
@@ -160,19 +210,20 @@
 	 * @param {number} settings.delay
 	 * @example $(elem).transition({ duration: 3000, property: 'all', timing: 'linear', delay: 1000 })
 	 * */
-	cssProp.transition = function(settings, callback) {
+	gadget.fnMethods.transition = function(settings, callback) {
 		var transition = {}, $this = $(this);
 		if(settings){
-			if(settings.duration)transition[cssProp._transitionType + '-duration'] = settings.duration / 1000 + 's';
-			if(settings.property)transition[cssProp._transitionType + '-property'] = settings.property;
-			if(settings.timing)transition[cssProp._transitionType + '-timing-function'] = settings.timing;
-			if(settings.delay)transition[cssProp._transitionType + '-delay'] = settings.delay / 1000 + 's';
+			if(settings.duration || settings.duration === 0)transition[gadget.css.transitionType + '-duration'] = settings.duration / 1000 + 's';
+			if(settings.property)transition[gadget.css.transitionType + '-property'] = settings.property;
+			if(settings.timing || settings.timing === 0)transition[gadget.css.transitionType + '-timing-function'] = settings.timing;
+			if(settings.delay || settings.delay === 0)transition[gadget.css.transitionType + '-delay'] = settings.delay / 1000 + 's';
 		}
 		//if($.typeof(settings) === 'function'){callback = settings}
 		//if(callback){
 		//	$this.transitionEnd(callback)
 		//}
 		$this.css(transition);
+		return $this;
 	};
 
 	/*
@@ -180,7 +231,7 @@
 	* transform的使用不同于与animate/transition, 因为它的旧有值会被新值覆盖!
 	* 由于transform有多个属性, options的值这里是固定格式! {pos:[12, 24, 36], scale: [1, 1, 0], rotate: [0, 0, 0], skew: [0, 0], perspective:0}
 	* */
-	cssProp.transform = function(options) {
+	gadget.fnMethods.transform = function(options) {
 		var optionsDemo = {pos:[12, 24, 36], scale: [1, 1, 0], rotate: {x: 0, y: 0, z: 0, deg:0}, skew: [0, 0], perspective:0};
 
 		var transformProp = {};
@@ -188,14 +239,14 @@
 		var pos, scale, rotate = '', skew, prt;
 
 		/*环境没有transform功能*/
-		if (cssProp._transformsEnabled === false) {
+		if (gadget.environment.isTransformsEnabled === false) {
 			if(options.pos){
 				transformProp.left = options.pos[0];
 				transformProp.top  = options.pos[1];
 			}
 		} else {
 			/*环境无transition功能*/
-			if (cssProp._cssTransitions === false) {
+			if (gadget.environment.isTransitionEnabled === false) {
 				pos    = options.pos    ? 'translate(' + options.pos[0] + 'px, ' + options.pos[1] + 'px) ' : '';
 				scale  = options.scale  ? 'scale(' + options.scale[0] + ', ' + options.scale[1] + ') ' : '';
 			}
@@ -207,7 +258,7 @@
 			/*rotate*/
 			if(options.rotate){
 				if(options.rotate.deg){
-					if(cssProp._cssTransitions && options.rotate.z){
+					if(gadget.environment.isTransitionEnabled && options.rotate.z){
 						rotate = 'rotate3d(' + options.rotate.x + ',' + options.rotate.y + ',' + options.rotate.z + ',' + options.rotate.deg +'deg) ';
 					}else{
 						rotate = 'rotate(' + options.rotate.deg + 'deg) ';
@@ -224,13 +275,13 @@
 			/*perspective*/
 			prt  = options.perspective   ? 'perspective(' + options.perspective + 'px) ' : '';
 			/*属性合并*/
-			transformProp[cssProp._transformType] = pos + scale + rotate + skew + prt;
-		} console.log('transformProp', transformProp);
-		$(this).css(transformProp);
+			transformProp[gadget.css.transformType] = pos + scale + rotate + skew + prt;
+		} //console.log('transformProp', transformProp);
+		return $(this).css(transformProp);
 	};
 
 	/* 获取transform的属性值是很难的, matrix计算比较复杂*/
-	cssProp.getComputedTranslateZ = function(id) {
+	gadget.getComputedTranslateZ = function(id) {
 		if(!window.getComputedStyle) return;
 		var obj = document.getElementById(id);
 		var style = getComputedStyle(obj),
@@ -239,7 +290,7 @@
 		return mat ? ~~(mat[1].split(', ')[14]) : 0;
 	};
 
-	cssProp.animationEnd = function (callback) {
+	gadget.animationEnd = function (callback) {
 		var events = ['webkitAnimationEnd', 'OAnimationEnd', 'MSAnimationEnd', 'animationend'],
 			i, j, dom = this;
 		function fireCallBack(e) {
@@ -256,7 +307,7 @@
 		return this;
 	};
 
-	cssProp.transitionEnd = function (callback) {
+	gadget.transitionEnd = function (callback) {
 		var events = ['webkitTransitionEnd', 'transitionend', 'oTransitionEnd', 'MSTransitionEnd', 'msTransitionEnd'],
 			i, j, dom = this;
 		function fireCallBack(e) {
@@ -275,7 +326,7 @@
 		return this;
 	};
 
-	cssProp.getTranslate = function (el, axis) {
+	gadget.fnMethods.getTranslate = function (el, axis) {
 		var matrix, curTransform, curStyle, transformMatrix;
 
 		// automatic axis detection
@@ -320,7 +371,7 @@
 		return curTransform || 0;
 	};
 
-	cssProp.requestAnimationFrame = function (callback) {
+	gadget.rAF = function (callback) {
 		if (window.requestAnimationFrame) return window.requestAnimationFrame(callback);
 		else if (window.webkitRequestAnimationFrame) return window.webkitRequestAnimationFrame(callback);
 		else if (window.mozRequestAnimationFrame) return window.mozRequestAnimationFrame(callback);
@@ -328,7 +379,7 @@
 			return window.setTimeout(callback, 1000 / 60);
 		}
 	};
-	cssProp.cancelAnimationFrame = function (id) {
+	gadget.off_rAF = function (id) {
 		if (window.cancelAnimationFrame) return window.cancelAnimationFrame(id);
 		else if (window.webkitCancelAnimationFrame) return window.webkitCancelAnimationFrame(id);
 		else if (window.mozCancelAnimationFrame) return window.mozCancelAnimationFrame(id);
@@ -337,7 +388,8 @@
 		}
 	};
 
-	$.extend(jQuery.fn, cssProp);
+	$.extend(jQuery.fn, gadget.fnMethods);
+	jQuery.fn.gadget = gadget
 }());
 
 
@@ -378,7 +430,7 @@
  });
  * */
 
-//cssProp.addKeyframes = function(name, frames){
+//gadget.addKeyframes = function(name, frames){
 //	// 参数name, frames是必须的
 //
 //	// 生成style标签
