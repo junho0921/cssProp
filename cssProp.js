@@ -7,6 +7,7 @@
 	* 1, transform方法基本兼容且处理多个css属性
 	* 2, 区分动态方法与静态方法
 	* 3, 修改命名
+	* //todo 优化transform有记忆功能
 	* */
 
 	var gadget = { 
@@ -106,35 +107,45 @@
 		gadget.css.type = 'OTransform';
 		gadget.css.transformType = '-o-transform';
 		gadget.css.transitionType = 'OTransition';
+		gadget.css.transitionEndType = 'OTransitionEnd';
 		gadget.css.animationType = '-o-animation';
+		gadget.css.animationEndType = 'OAnimationEnd';
 		if (bodyStyle.perspectiveProperty === undefined && bodyStyle.webkitPerspective === undefined) gadget.css.type = false;
 	}
 	if (bodyStyle.MozTransform !== undefined) {
 		gadget.css.type = 'MozTransform';
 		gadget.css.transformType = '-moz-transform';
 		gadget.css.transitionType = 'MozTransition';
+		gadget.css.transitionEndType = 'MozTransitionEnd';
 		gadget.css.animationType = '-moz-animation';
+		gadget.css.animationEndType = 'MozAnimationEnd'; // 不存在
 		if (bodyStyle.perspectiveProperty === undefined && bodyStyle.MozPerspective === undefined) gadget.css.type = false;
 	}
 	if (bodyStyle.webkitTransform !== undefined) {
 		gadget.css.type = 'webkitTransform';
 		gadget.css.transformType = '-webkit-transform';
 		gadget.css.transitionType = 'webkitTransition';
+		gadget.css.transitionEndType = 'webkitTransitionEnd';
 		gadget.css.animationType = '-webkit-animation';
+		gadget.css.animationEndType = 'webkitAnimationEnd';
 		if (bodyStyle.perspectiveProperty === undefined && bodyStyle.webkitPerspective === undefined) gadget.css.type = false;
 	}
 	if (bodyStyle.msTransform !== undefined) {
 		gadget.css.type = 'msTransform';
 		gadget.css.transformType = '-ms-transform';
 		gadget.css.transitionType = 'msTransition';
+		gadget.css.transitionEndType = 'msTransitionEnd';
 		gadget.css.animationType = '-ms-animation';
+		gadget.css.animationEndType = 'MSAnimationEnd';
 		if (bodyStyle.msTransform === undefined) gadget.css.type = false;
 	}
 	if (bodyStyle.transform !== undefined && gadget.css.type !== false) {
 		gadget.css.type = 'transform';
 		gadget.css.transformType = 'transform';
 		gadget.css.transitionType = 'transition';
+		gadget.css.transitionEndType = 'transitionend';
 		gadget.css.animationType = 'animation';
+		gadget.css.animationEndType = 'animationend';
 	}
 	gadget.environment.isTransformsEnabled = !!gadget.css.type;
 
@@ -218,13 +229,10 @@
 			if(settings.timing || settings.timing === 0)transition[gadget.css.transitionType + '-timing-function'] = settings.timing;
 			if(settings.delay || settings.delay === 0)transition[gadget.css.transitionType + '-delay'] = settings.delay / 1000 + 's';
 		}
-		//if($.typeof(settings) === 'function'){callback = settings}
-		//if(callback){
-		//	$this.transitionEnd(callback)
-		//}
 		$this.css(transition);
-		return $this;
+		return this;
 	};
+	gadget.fnMethods.noTransition = function(){ return $(this).transition({duration:0}); };
 
 	/*
 	* 变形transform
@@ -291,39 +299,11 @@
 	};
 
 	gadget.animationEnd = function (callback) {
-		var events = ['webkitAnimationEnd', 'OAnimationEnd', 'MSAnimationEnd', 'animationend'],
-			i, j, dom = this;
-		function fireCallBack(e) {
-			callback(e);
-			for (i = 0; i < events.length; i++) {
-				dom.off(events[i], fireCallBack);
-			}
-		}
-		if (callback) {
-			for (i = 0; i < events.length; i++) {
-				dom.on(events[i], fireCallBack);
-			}
-		}
-		return this;
+		return this.one(gadget.css.animationEndType, callback);
 	};
 
-	gadget.transitionEnd = function (callback) {
-		var events = ['webkitTransitionEnd', 'transitionend', 'oTransitionEnd', 'MSTransitionEnd', 'msTransitionEnd'],
-			i, j, dom = this;
-		function fireCallBack(e) {
-			/*jshint validthis:true */
-			if (e.target !== this) return;
-			callback.call(this, e);
-			for (i = 0; i < events.length; i++) {
-				dom.off(events[i], fireCallBack);
-			}
-		}
-		if (callback) {
-			for (i = 0; i < events.length; i++) {
-				dom.on(events[i], fireCallBack);
-			}
-		}
-		return this;
+	gadget.fnMethods.transitionEnd = function (callback) {
+		return this.one(gadget.css.transitionEndType, callback);
 	};
 
 	gadget.fnMethods.getTranslate = function (el, axis) {
@@ -388,92 +368,76 @@
 		}
 	};
 
+	gadget.addKeyframes = function(name, frames){
+		gadget._RenderKeyframesDemo =  function(){
+			// 示范使用addKeyframes方法生成与_gridPosAry对应位置的keyframes
+			var gridPosAry = this._gridPosAry;
+			for(var i = 0; i < gridPosAry.length; i++){
+				var position = gridPosAry[i];
+				var translateA = 'translate3D(' + position.left +'px, ' + position.top +'px, 0px)';
+				gadget.addKeyframes('pos' + i, {
+					'0%,100%': {
+						opacity: 1,
+						'z-index': 99,
+						'-webkit-transform': translateA + ' scale3d(1, 1, 1)',
+						transform: translateA + ' scale3d(1, 1, 1)'
+					},
+					'50%': {
+						opacity: 0.5,
+						'z-index': 99,
+						'-webkit-transform': translateA + ' scale3d(1.2, 1.2, 1.2)',
+						transform: translateA + ' scale3d(1.2, 1.2, 1.2)'
+					}
+				});
+			}
+		};
+		// 参数name, frames是必须的
+
+		// 生成style标签
+		var styleTag = document.createElement('style');
+		styleTag.rel = 'stylesheet';
+		styleTag.type = 'text/css';
+		// 插入到head里
+		document.getElementsByTagName('head')[0].appendChild(styleTag);
+
+		var styles = styleTag.sheet;
+
+		// 生成name命名的keyframes
+		try {
+			var idx = styles.insertRule('@keyframes ' + name + '{}',
+				styles.cssRules.length);
+		}
+		catch(e) {
+			if(e.name == 'SYNTAX_ERR' || e.name == 'SyntaxError') {
+				idx = styles.insertRule('@-webkit-keyframes ' + name + '{}',
+					styles.cssRules.length);
+			}
+			else {
+				throw e;
+			}
+		}
+
+		var original = styles.cssRules[idx];
+
+		// 遍历参数2frames对象里的属性, 来添加到keyframes里
+		for(var text in frames) {
+			var  css = frames[text];
+
+			var cssRule = text + " {";
+
+			for(var k in css) {
+				cssRule += k + ':' + css[k] + ';';
+			}
+			cssRule += "}";
+			if('appendRule' in original) {
+				original.appendRule(cssRule);
+			}
+			else {
+				original.insertRule(cssRule);
+			}
+		}
+	};
+
 	$.extend(jQuery.fn, gadget.fnMethods);
-	jQuery.fn.gadget = gadget
+	jQuery.fn.gadget = gadget;
 }());
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
- *
- * @example
- var translateA = 'translate3D(' + position.left +'px, ' + position.top +'px, 0px)';
- this._addKeyframes('pos' + i, {
- '0%,100%': {
- opacity: 1,
- 'z-index': 99,
- '-webkit-transform': translateA + ' scale3d(1, 1, 1)',
- transform: translateA + ' scale3d(1, 1, 1)'
- },
- '50%': {
- opacity: 0.5,
- 'z-index': 99,
- '-webkit-transform': translateA + ' scale3d(1.2, 1.2, 1.2)',
- transform: translateA + ' scale3d(1.2, 1.2, 1.2)'
- }
- });
- * */
-
-//gadget.addKeyframes = function(name, frames){
-//	// 参数name, frames是必须的
-//
-//	// 生成style标签
-//	var styleTag = document.createElement('style');
-//	styleTag.rel = 'stylesheet';
-//	styleTag.type = 'text/css';
-//	// 插入到head里
-//	document.getElementsByTagName('head')[0].appendChild(styleTag);
-//
-//	var styles = styleTag.sheet;
-//
-//	// 生成name命名的keyframes
-//	try {
-//		var idx = styles.insertRule('@keyframes ' + name + '{}',
-//			styles.cssRules.length);
-//	}
-//	catch(e) {
-//		if(e.name == 'SYNTAX_ERR' || e.name == 'SyntaxError') {
-//			idx = styles.insertRule('@-webkit-keyframes ' + name + '{}',
-//				styles.cssRules.length);
-//		}
-//		else {
-//			throw e;
-//		}
-//	}
-//
-//	var original = styles.cssRules[idx];
-//
-//	// 遍历参数2frames对象里的属性, 来添加到keyframes里
-//	for(var text in frames) {
-//		var  css = frames[text];
-//
-//		var cssRule = text + " {";
-//
-//		for(var k in css) {
-//			cssRule += k + ':' + css[k] + ';';
-//		}
-//		cssRule += "}";
-//		if('appendRule' in original) {
-//			original.appendRule(cssRule);
-//		}
-//		else {
-//			original.insertRule(cssRule);
-//		}
-//	}
-//};
