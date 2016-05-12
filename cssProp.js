@@ -1,15 +1,5 @@
 (function(){
 
-	/*
-	* 本插件的意义在于可以直接包办动画方法, 即使不支持也可以找这里找到降级方法!
-	*
-	* 优化经历:
-	* 1, transform方法基本兼容且处理多个css属性
-	* 2, 区分动态方法与静态方法
-	* 3, 修改命名
-	* //todo 优化transform有记忆功能
-	* */
-
 	var gadget = { 
 		/*静态方法及属性*/
 		css: null,
@@ -265,7 +255,7 @@
 			}
 			/*rotate*/
 			if(options.rotate){
-				if(options.rotate.deg){
+				if(options.rotate.deg || options.rotate.deg === 0){
 					if(gadget.environment.isTransitionEnabled && options.rotate.z){
 						rotate = 'rotate3d(' + options.rotate.x + ',' + options.rotate.y + ',' + options.rotate.z + ',' + options.rotate.deg +'deg) ';
 					}else{
@@ -284,7 +274,7 @@
 			prt  = options.perspective   ? 'perspective(' + options.perspective + 'px) ' : '';
 			/*属性合并*/
 			transformProp[gadget.css.transformType] = pos + scale + rotate + skew + prt;
-		} //console.log('transformProp', transformProp);
+		} console.log('transformProp', transformProp);
 		return $(this).css(transformProp);
 	};
 

@@ -1,0 +1,77 @@
+= cssProp
+
+== 介绍
+
+本组件尝试在页面初始化的时候, 根据浏览器环境选择兼容方法, 同时提供动画方法可以以最简单直接的方法就可以调整页面动画, 并添加方法到jquery对象的原型对象里.
+
+== 优化经历
+
+.2016-05
+. transform方法基本兼容且处理多个css属性
+. 区分动态方法与静态方法
+. 修改命名
+
+== 依赖
+
+`jQuery`
+
+== 计划 [todo]
+
+. 优化transform有记忆功能
+
+== api
+
+****
+
+[source, javascript]
+.api
+----
+var gadget = {
+		/*静态方法及属性*/
+		css: null,
+
+		environment: null,
+
+		// eventType
+		startEventType: null,
+		processEventType: null,
+		stopEventType: null,
+
+		// requestAnimationFrame
+		rAF: null,
+		off_rAF: null,
+
+		// 触控点坐标
+		getTouchPos: null,
+		getTouchX: null,
+		getTouchY: null
+	};
+
+	gadget.environment = {
+		// css兼容前缀
+		isTransformsEnabled: null,
+		isTransitionEnabled: null,
+		isTouchEnable: null
+	};
+
+	gadget.css = {
+		type: null,
+		transformType: null,
+		transitionType: null,
+		animationType: null
+	};
+
+	gadget.fnMethods = {
+		/*动态方法*/
+		animation: null,
+		transition: null,
+		transform: null,
+		getTranslate: null,
+
+		// 绑定事件类型与方法的Api
+		onUiStart: null,
+		onUiProcess: null,
+		onUiStop: null
+	};
+----
+****
