@@ -1,2 +1,0 @@
-# cssProp
-css兼容方法, 依赖jQuery, 对jQuery原型扩展, 初步版本
