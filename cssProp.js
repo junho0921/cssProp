@@ -100,6 +100,7 @@
 		gadget.css.transitionEndType = 'OTransitionEnd';
 		gadget.css.animationType = '-o-animation';
 		gadget.css.animationEndType = 'OAnimationEnd';
+		gadget.css['@keyframes'] = '@-o-keyframes';
 		if (bodyStyle.perspectiveProperty === undefined && bodyStyle.webkitPerspective === undefined) gadget.css.type = false;
 	}
 	if (bodyStyle.MozTransform !== undefined) {
@@ -109,6 +110,7 @@
 		gadget.css.transitionEndType = 'MozTransitionEnd';
 		gadget.css.animationType = '-moz-animation';
 		gadget.css.animationEndType = 'MozAnimationEnd'; // 不存在
+		gadget.css['@keyframes'] = '@-moz-keyframes';
 		if (bodyStyle.perspectiveProperty === undefined && bodyStyle.MozPerspective === undefined) gadget.css.type = false;
 	}
 	if (bodyStyle.webkitTransform !== undefined) {
@@ -118,6 +120,7 @@
 		gadget.css.transitionEndType = 'webkitTransitionEnd';
 		gadget.css.animationType = '-webkit-animation';
 		gadget.css.animationEndType = 'webkitAnimationEnd';
+		gadget.css['@keyframes'] = '@-webkit-keyframes';
 		if (bodyStyle.perspectiveProperty === undefined && bodyStyle.webkitPerspective === undefined) gadget.css.type = false;
 	}
 	if (bodyStyle.msTransform !== undefined) {
@@ -127,6 +130,7 @@
 		gadget.css.transitionEndType = 'msTransitionEnd';
 		gadget.css.animationType = '-ms-animation';
 		gadget.css.animationEndType = 'MSAnimationEnd';
+		gadget.css['@keyframes'] = '@-ms-keyframes';
 		if (bodyStyle.msTransform === undefined) gadget.css.type = false;
 	}
 	if (bodyStyle.transform !== undefined && gadget.css.type !== false) {
@@ -136,8 +140,29 @@
 		gadget.css.transitionEndType = 'transitionend';
 		gadget.css.animationType = 'animation';
 		gadget.css.animationEndType = 'animationend';
+		gadget.css['@keyframes'] = '@keyframes';
 	}
 	gadget.environment.isTransformsEnabled = !!gadget.css.type;
+
+	// 简便的修正方法, 推荐使用, 而且可以不断的扩展而保持接口一样
+	var fixObj = {
+		transform: gadget.css.transformType,
+		transition: gadget.css.transitionType,
+		transitionend: gadget.css.transitionEndType,
+		animation: gadget.css.animationType,
+		animationend: gadget.css.animationEndType,
+
+		touchstart: gadget.startEventType,
+		touchmove: gadget.processEventType,
+		touchend: gadget.stopEventType,
+
+		requestAnimationFrame: gadget.rAF,
+		cancelAnimationFrame: gadget.off_rAF
+	};
+	fixObj['@keyframes'] = gadget.css['@keyframes'];
+	gadget.fix = function (attr) {
+		return fixObj[attr];
+	};
 
 	/*
 	 * 动画animation
@@ -341,92 +366,126 @@
 		return curTransform || 0;
 	};
 
-	gadget.rAF = function (callback) {
-		if (window.requestAnimationFrame) return window.requestAnimationFrame(callback);
-		else if (window.webkitRequestAnimationFrame) return window.webkitRequestAnimationFrame(callback);
-		else if (window.mozRequestAnimationFrame) return window.mozRequestAnimationFrame(callback);
-		else {
-			return window.setTimeout(callback, 1000 / 60);
-		}
-	};
-	gadget.off_rAF = function (id) {
-		if (window.cancelAnimationFrame) return window.cancelAnimationFrame(id);
-		else if (window.webkitCancelAnimationFrame) return window.webkitCancelAnimationFrame(id);
-		else if (window.mozCancelAnimationFrame) return window.mozCancelAnimationFrame(id);
-		else {
-			return window.clearTimeout(id);
-		}
-	};
+	// rAF兼容写法
+	if (window.requestAnimationFrame) {gadget.rAF = window.requestAnimationFrame;}
+	else if (window.webkitRequestAnimationFrame) {gadget.rAF = window.webkitRequestAnimationFrame;}
+	else if (window.mozRequestAnimationFrame) {gadget.rAF = window.mozRequestAnimationFrame;}
+	else {gadget.rAF = function (callback) {setTimeout(callback, 1000 / 60)};}
 
-	gadget.addKeyframes = function(name, frames){
-		gadget._RenderKeyframesDemo =  function(){
-			// 示范使用addKeyframes方法生成与_gridPosAry对应位置的keyframes
-			var gridPosAry = this._gridPosAry;
-			for(var i = 0; i < gridPosAry.length; i++){
-				var position = gridPosAry[i];
-				var translateA = 'translate3D(' + position.left +'px, ' + position.top +'px, 0px)';
-				gadget.addKeyframes('pos' + i, {
-					'0%,100%': {
-						opacity: 1,
-						'z-index': 99,
-						'-webkit-transform': translateA + ' scale3d(1, 1, 1)',
-						transform: translateA + ' scale3d(1, 1, 1)'
-					},
-					'50%': {
-						opacity: 0.5,
-						'z-index': 99,
-						'-webkit-transform': translateA + ' scale3d(1.2, 1.2, 1.2)',
-						transform: translateA + ' scale3d(1.2, 1.2, 1.2)'
+	if (window.cancelAnimationFrame) {gadget.off_rAF = window.cancelAnimationFrame;}
+	else if (window.webkitCancelAnimationFrame) {gadget.off_rAF = window.webkitCancelAnimationFrame;}
+	else if (window.mozCancelAnimationFrame) {gadget.off_rAF = window.mozCancelAnimationFrame;}
+	else {gadget.off_rAF = function (callbackId) {clearTimeout(callbackId)};}
+
+	// 入口api, 为keyframe动画提供便利的入口
+	function renderCss (cssObj){
+		// 格式示范
+		//cssObj.model1 = {
+		//	'.con li:nth-child(1)': {
+		//		'keyFrameName1 1s ease-out forwards': {
+		//			'0%': {
+		//				opacity: 1
+		//			},
+		//			'100%': {
+		//				opacity: 0
+		//			}
+		//		}
+		//	},
+		//	'.con li:nth-child(2)': {
+		//		'keyFrameName2 1s ease-out forwards': {
+		//			'0%': {
+		//				opacity: 1
+		//			},
+		//			'100%': {
+		//				opacity: 0
+		//			}
+		//		}
+		//	}
+		//};
+		//
+		//cssObj.model2 = {
+		//	'.con':{
+		//		width:'200px'
+		//	},
+		//	'.ton':{
+		//		width:'200px'
+		//	}
+		//};
+
+		// 格式限制 // toFix 格式拓展
+		var firstChild, isCssObjGrandchildObj, isKeyframes;// isKeyframes的判断不准确
+		if(!$.isPlainObject(cssObj)){return false}
+		if(!$.isPlainObject(firstChild = cssObj[Object.keys(cssObj)[0]])) {return false}
+		isCssObjGrandchildObj = $.isPlainObject(firstChild[Object.keys(firstChild)[0]]);
+
+		if(isKeyframes = isCssObjGrandchildObj){ // isKeyframes: 需要进行解析, 整理出animation对象与keyframe的对象, 分别添加到style
+			var animationObj = {};
+			var keyframesObj = {};
+
+			eachKeys(cssObj, function (selector, value) {
+				eachKeys(value, function (animationRule, keyframeRule) {
+					var rules = animationRule.split(';');
+					animationRule = rules.shift();// 所以必须动画属性在前头
+					animationObj[selector] = {
+						animation: animationRule
+					};
+					rules.forEach(function (rule) {
+						rule = $.trim(rule).split(':');
+						animationObj[selector][rule[0]] = rule[1];
+					});
+					var keyframeName = $.trim(animationRule).split(' ')[0];
+					keyframesObj[keyframeName] = keyframeRule
+				})
+			});
+			_addCssRule(animationObj);
+			_addCssRule(keyframesObj, true);
+		}else{
+			_addCssRule(cssObj);
+		}
+	}
+	// 基本方法, 接受的参数都是按照css规范, 第一层属性名必须是选择器, 其值是css规则内容.
+	function _addCssRule (obj, isKeyframes){
+		var $tyle = $('<style>', {rel:'stylesheet', type:'text/css'}).appendTo($('head'));
+		var styles = $tyle[0].sheet;
+
+		function getCssRule(selector, cssRuleObj){
+			var cssRule = '';
+			eachKeys(cssRuleObj, function (attr, value) {
+				cssRule += fixCss(attr) + ':' + value + ';';
+			});
+			return selector + '{' + cssRule + '}';
+		}
+
+		eachKeys(obj, function (selector, cssRule) {
+			var r1, frameR, keyFrameName, frames;
+			if(isKeyframes){
+				keyFrameName = selector;
+				frames = cssRule;
+				r1 = fixCss('@keyframes') + ' ' + keyFrameName + '{}';
+			}else{
+				r1 = getCssRule(selector, cssRule);
+			}
+			try {
+				frameR = styles.insertRule(r1, styles.cssRules.length);
+			} catch(e) {
+				throw e;
+			}
+			if(isKeyframes){
+				var original = styles.cssRules[frameR];
+				// 遍历参数2frames对象里的属性, 来添加到keyframes里
+				eachKeys(frames, function (text, css) {
+					var cssRule = getCssRule(text, css);
+					if('appendRule' in original) {
+						original.appendRule(cssRule);
+					} else {
+						original.insertRule(cssRule);
 					}
 				});
 			}
-		};
-		// 参数name, frames是必须的
-
-		// 生成style标签
-		var styleTag = document.createElement('style');
-		styleTag.rel = 'stylesheet';
-		styleTag.type = 'text/css';
-		// 插入到head里
-		document.getElementsByTagName('head')[0].appendChild(styleTag);
-
-		var styles = styleTag.sheet;
-
-		// 生成name命名的keyframes
-		try {
-			var idx = styles.insertRule('@keyframes ' + name + '{}',
-				styles.cssRules.length);
-		}
-		catch(e) {
-			if(e.name == 'SYNTAX_ERR' || e.name == 'SyntaxError') {
-				idx = styles.insertRule('@-webkit-keyframes ' + name + '{}',
-					styles.cssRules.length);
-			}
-			else {
-				throw e;
-			}
-		}
-
-		var original = styles.cssRules[idx];
-
-		// 遍历参数2frames对象里的属性, 来添加到keyframes里
-		for(var text in frames) {
-			var  css = frames[text];
-
-			var cssRule = text + " {";
-
-			for(var k in css) {
-				cssRule += k + ':' + css[k] + ';';
-			}
-			cssRule += "}";
-			if('appendRule' in original) {
-				original.appendRule(cssRule);
-			}
-			else {
-				original.insertRule(cssRule);
-			}
-		}
-	};
+		});
+	}
+	gadget.renderCss = renderCss;
+	gadget._addCssRule = _addCssRule;
 
 	$.extend(jQuery.fn, gadget.fnMethods);
 	jQuery.fn.gadget = gadget;
